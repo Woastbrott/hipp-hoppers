@@ -1,8 +1,11 @@
 # Hipp Hoppers
 
-Web-Shop rund um Gottesanbeterinnen-Zucht und Entomologie. Dieses Repo enthält
-**Phase 0: das Fundament** — Design-System, Datenbank-Schema, Auth-Flow, CI.
-Storefront-Inhalte, Produkt-/Artenseiten, CRUD-UI und Warenkorb kommen später.
+Web-Shop rund um Gottesanbeterinnen-Zucht und Entomologie.
+
+Stand: das Fundament (Design-System, Datenbank-Schema, Auth-Flow, CI) und das
+**Arten-CRUD im Admin** unter `/admin/species` — Liste, Anlegen, Bearbeiten, Löschen
+mit Bestätigung, Publish/Draft-Umschalter. Produkt-CRUD, Bild-Uploads, öffentliche
+Artenseiten und Warenkorb kommen später.
 
 ## Setup in fünf Schritten
 
@@ -176,15 +179,21 @@ src/
       layout.tsx       gemeinsame Hülle (kein Gate)
       login/           öffentlich erreichbar
       (dashboard)/     Auth-Gate + Admin-Shell
+        species/       Arten-CRUD: Liste, new/, [id]/, actions.ts
     layout.tsx, error.tsx, not-found.tsx
-  components/ui/       Button, Input, Card, Container, Section, Reveal
+  components/ui/       Button, SubmitButton, Field, Input, Select, Textarea,
+                       Checkbox, Card, Badge, Container, Section, Reveal
   db/
     schema.ts          Tabellen + Relations, Typen per Infer*Model
     index.ts           Drizzle-Client (Neon, server-only)
     migrations/        drizzle-kit-Output
     seed.ts            idempotenter Admin-Seed
   lib/
-    auth/              JWT, Session, Passwort, Rate-Limit, CSRF
+    auth/              JWT, Session, Passwort, Rate-Limit, CSRF, requireAdmin
+    species/           Queries, Schwierigkeitsgrad, Formular-Mapping
+    validation/        Zod-Schemata der Formulargrenzen
+    slug.ts            Slug-Vorschlag
+    db-errors.ts       Postgres-Fehlercodes (23505/23503) lesbar machen
     env.ts             Zod-validierte Env (server-only)
   styles/globals.css   @theme-Tokens
   proxy.ts             Nonce-CSP + JWT-Vorprüfung (Next 16, ex-middleware.ts)
@@ -197,12 +206,28 @@ Install (frozen lockfile) → typecheck → lint → test → build. Node ist au
 gepinnt, pnpm-Store und Next-Build-Cache werden gecacht. Die Env-Variablen sind
 syntaktisch valide Dummy-Werte, damit die Zod-Validierung im Build wirklich durchläuft.
 
+## Entschieden: durchgehend dynamisches Rendering mit Nonce-CSP
+
+Die App rendert jede Route pro Request. `app/layout.tsx` ruft dafür `connection()` auf.
+Das ist kein Versehen, sondern die Konsequenz der strikten CSP: Next hängt den Nonce
+nur beim Rendern an seine Script-Tags, eine statisch vorgerenderte Seite würde von der
+eigenen Policy blockiert.
+
+Der Trade-off: strikte, nonce-basierte CSP ohne `unsafe-inline` für Scripts, dazu ein
+einziger Renderpfad, den man nicht im Kopf behalten muss — gegen statisches Rendering
+und dessen Latenz- und Kostenvorteil. Für einen Admin-lastigen Shop ohne öffentlichen
+Traffic ist das der richtige Tausch.
+
+Eine hash-basierte CSP wäre die Alternative, wird aber **nicht** gebaut. Neu bewertet
+wird die Frage erst, wenn die öffentliche Storefront steht und Performance oder Kosten
+es tatsächlich erfordern — nicht vorher.
+
 ## Offene Punkte
 
-- **Nonce-CSP macht jede Route dynamisch.** `app/layout.tsx` ruft `connection()` auf,
-  weil Next den Nonce nur beim Rendern pro Request an seine Script-Tags hängt — eine
-  statisch vorgerenderte Seite würde von der eigenen CSP blockiert. Sollen
-  Storefront-Routen später statisch werden, braucht es eine hash-basierte CSP.
 - `style-src` trägt `'unsafe-inline'`. next/font und Tailwind schreiben Style-Tags zur
   Laufzeit; ein Nonce erreicht sie nicht zuverlässig.
 - `robots: { index: false }` steht global im Root-Layout. Vor dem Launch umstellen.
+- `media` löscht mit einer Art kaskadierend mit. Sobald Bilder in Vercel Blob liegen,
+  bleiben deren Dateien dabei liegen — Aufräumschritt gehört zum Upload-Feature.
+- Die Artenliste hat weder Pagination noch Sortierung oder Suche. Ab etwa fünfzig
+  Arten wird das unhandlich.
