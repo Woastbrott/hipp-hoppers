@@ -2,10 +2,10 @@
 
 Web-Shop rund um Gottesanbeterinnen-Zucht und Entomologie.
 
-Stand: das Fundament (Design-System, Datenbank-Schema, Auth-Flow, CI) und das
-**Arten-CRUD im Admin** unter `/admin/species` — Liste, Anlegen, Bearbeiten, Löschen
-mit Bestätigung, Publish/Draft-Umschalter. Produkt-CRUD, Bild-Uploads, öffentliche
-Artenseiten und Warenkorb kommen später.
+Stand: das Fundament (Design-System, Datenbank-Schema, Auth-Flow, CI), das
+**Arten-CRUD im Admin** unter `/admin/species` und die **Bildverwaltung** dazu —
+Upload in den Vercel Blob Store, Alt-Texte, Reihenfolge, Löschen samt Aufräumen.
+Produkt-CRUD, öffentliche Artenseiten und Warenkorb kommen später.
 
 ## Setup in fünf Schritten
 
@@ -17,8 +17,9 @@ pnpm install
 cp .env.example .env.local
 ```
 
-Dann `.env.local` ausfüllen (siehe [Environment](#environment)) — mindestens
-`DATABASE_URL` und `JWT_SECRET`.
+Dann `.env.local` ausfüllen (siehe [Environment](#environment)): `DATABASE_URL`,
+`JWT_SECRET` und `BLOB_READ_WRITE_TOKEN`. Den Blob-Token gibt es im Vercel-Dashboard
+unter Storage → Blob → Store anlegen → „Read/Write Token".
 
 ```bash
 pnpm db:migrate
@@ -48,7 +49,7 @@ kippt etwas, bricht der **Build**, nicht erst die erste Anfrage.
 | `APP_ORIGIN`            | nein    | Erlaubte Origin für den CSRF-Check. Leer ⇒ gegen Request-Host        |
 | `SEED_ADMIN_EMAIL`      | Seed    | Konto, das `pnpm db:seed` anlegt                                     |
 | `SEED_ADMIN_PASSWORD`   | Seed    | Passwort dazu, ≥ 12 Zeichen. Wird beim Lauf gehasht, nie gespeichert |
-| `BLOB_READ_WRITE_TOKEN` | nein    | Vercel Blob, Platzhalter für Phase 1                                 |
+| `BLOB_READ_WRITE_TOKEN` | ja      | Vercel Blob Store, Read/Write-Token für die Bild-Uploads             |
 
 Secret erzeugen:
 
@@ -58,18 +59,19 @@ openssl rand -base64 48
 
 ## Scripts
 
-| Script             | Was es tut                                   |
-| ------------------ | -------------------------------------------- |
-| `pnpm dev`         | Dev-Server                                   |
-| `pnpm build`       | Produktions-Build (inkl. Env-Validierung)    |
-| `pnpm start`       | Produktions-Server                           |
-| `pnpm typecheck`   | `tsc --noEmit`                               |
-| `pnpm lint`        | ESLint (typ-informiert)                      |
-| `pnpm format`      | Prettier über alles                          |
-| `pnpm test`        | Vitest (Auth-Pfade gegen PGlite)             |
-| `pnpm db:generate` | Migration aus `src/db/schema.ts` erzeugen    |
-| `pnpm db:migrate`  | Migrationen anwenden                         |
-| `pnpm db:seed`     | Admin-User aus der Env anlegen/aktualisieren |
+| Script             | Was es tut                                       |
+| ------------------ | ------------------------------------------------ |
+| `pnpm dev`         | Dev-Server                                       |
+| `pnpm build`       | Produktions-Build (inkl. Env-Validierung)        |
+| `pnpm start`       | Produktions-Server                               |
+| `pnpm typecheck`   | `tsc --noEmit`                                   |
+| `pnpm lint`        | ESLint (typ-informiert)                          |
+| `pnpm format`      | Prettier über alles                              |
+| `pnpm test`        | Vitest (Auth-Pfade gegen PGlite)                 |
+| `pnpm db:generate` | Migration aus `src/db/schema.ts` erzeugen        |
+| `pnpm db:migrate`  | Migrationen anwenden                             |
+| `pnpm db:seed`     | Admin-User aus der Env anlegen/aktualisieren     |
+| `pnpm blob:prune`  | Verwaiste Blobs auflisten (`--delete` räumt auf) |
 
 ## Architekturentscheidungen
 
@@ -118,6 +120,33 @@ Referentielle Integrität bleibt damit in der DB — ein untypisiertes
 **Tests gegen echtes Postgres.** Rate-Limiter und `token_version`-Check leben in SQL;
 ein gemockter Query-Builder würde nur sich selbst testen. Die Suite fährt PGlite
 (Postgres als WASM) und spielt dabei die committete Migration wirklich ein.
+
+**Client-Upload statt Server Action.** Vercel kappt Request-Bodies bei rund 4,5 MB —
+ein Foto liegt schnell darüber. Der Browser holt sich ein kurzlebiges Token von
+`/api/admin/media/upload` und lädt direkt in den Store. Diese Route ist damit der
+Sicherheitspunkt: `requireAdmin()` zuerst, dann Formatliste ohne SVG, 10-MB-Grenze und
+ein Zielpfad, der unter `species/<id>/` liegen muss.
+
+**`onUploadCompleted` trägt die Persistenz nicht.** Der Haken feuert nur, wenn der Store
+die Anwendung erreichen kann — lokal also nie. Stattdessen meldet der Client nach dem
+Upload selbst, was er hochgeladen hat. Geglaubt wird davon nichts: Host und Prefix
+werden geprüft, die Existenz per `head()` bestätigt.
+
+**`width`/`height` kommen vom Client.** Sie sind Layout-Daten für `next/image` und
+verhindern Umbrüche beim Laden; über Zugriff oder Inhalt entscheiden sie nichts. Ein
+falscher Wert erzeugt einen Darstellungsfehler für die Person, die das Bild selbst
+hochgeladen hat. Serverseitig zu messen hieße, jedes Bild noch einmal herunterzuladen —
+Aufwand ohne Sicherheitsgewinn. Geprüft wird deshalb nur auf Plausibilität.
+
+**Löschen: erst die Datenbank, dann der Store.** Andersherum zeigte bei einem Fehlschlag
+ein Eintrag auf eine gelöschte Datei — ein kaputtes Bild im Shop ist schlimmer als eine
+verwaiste Datei, die ein paar Cent kostet. Der `del()`-Aufruf ist best effort; was
+liegen bleibt, sammelt `pnpm blob:prune` wieder ein.
+
+**Reihenfolge per Positions-Tausch.** Hoch/Runter tauscht die Positionen zweier
+Nachbarn in einem einzigen `UPDATE … CASE` — atomar ohne Transaktion, die der
+neon-http-Treiber nicht kann. Lücken in der Zahlenfolge nach einem Löschen stören
+nicht: sortiert wird nach Position, nicht danach, ob sie lückenlos ist.
 
 ## Design-System
 
@@ -179,7 +208,8 @@ src/
       layout.tsx       gemeinsame Hülle (kein Gate)
       login/           öffentlich erreichbar
       (dashboard)/     Auth-Gate + Admin-Shell
-        species/       Arten-CRUD: Liste, new/, [id]/, actions.ts
+        species/       Arten-CRUD + Bildverwaltung: Liste, new/, [id]/, actions.ts
+    api/admin/media/   Token-Route für den Client-Upload
     layout.tsx, error.tsx, not-found.tsx
   components/ui/       Button, SubmitButton, Field, Input, Select, Textarea,
                        Checkbox, Card, Badge, Container, Section, Reveal
@@ -190,11 +220,14 @@ src/
     seed.ts            idempotenter Admin-Seed
   lib/
     auth/              JWT, Session, Passwort, Rate-Limit, CSRF, requireAdmin
+    blob/              Upload-Vertrag, Token-Entscheidung, Prune-Logik
+    media/             Queries für Bilder einer Art
     species/           Queries, Schwierigkeitsgrad, Formular-Mapping
     validation/        Zod-Schemata der Formulargrenzen
     slug.ts            Slug-Vorschlag
     db-errors.ts       Postgres-Fehlercodes (23505/23503) lesbar machen
     env.ts             Zod-validierte Env (server-only)
+  scripts/             CLI: blob-prune
   styles/globals.css   @theme-Tokens
   proxy.ts             Nonce-CSP + JWT-Vorprüfung (Next 16, ex-middleware.ts)
 ```
@@ -227,7 +260,9 @@ es tatsächlich erfordern — nicht vorher.
 - `style-src` trägt `'unsafe-inline'`. next/font und Tailwind schreiben Style-Tags zur
   Laufzeit; ein Nonce erreicht sie nicht zuverlässig.
 - `robots: { index: false }` steht global im Root-Layout. Vor dem Launch umstellen.
-- `media` löscht mit einer Art kaskadierend mit. Sobald Bilder in Vercel Blob liegen,
-  bleiben deren Dateien dabei liegen — Aufräumschritt gehört zum Upload-Feature.
+- Der Uploader braucht zwangsläufig JavaScript — ein Client-Upload geht nicht anders.
+  Alles andere in der Bildverwaltung (Alt-Text, Reihenfolge, Löschen) läuft ohne.
+- Keine Bild-Optimierungspipeline: hochgeladen wird, was ausgewählt wurde. `next/image`
+  skaliert beim Ausliefern, das Original bleibt im Store liegen.
 - Die Artenliste hat weder Pagination noch Sortierung oder Suche. Ab etwa fünfzig
   Arten wird das unhandlich.
