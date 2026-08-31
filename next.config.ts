@@ -51,6 +51,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
 
+  /*
+   * Selbst gehostet statt auf Vercel: 'standalone' erzeugt unter .next/standalone
+   * einen lauffaehigen Server samt der wirklich benoetigten Dateien aus node_modules.
+   * Ohne das muesste das komplette node_modules mit ins Image.
+   */
+  output: 'standalone',
+
   // `@node-rs/argon2` ist ein natives Modul (.node) und darf nicht gebundelt werden.
   serverExternalPackages: ['@node-rs/argon2'],
 
