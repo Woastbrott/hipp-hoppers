@@ -102,7 +102,6 @@ type RangeCheck = {
   max: number | null;
   /** Der Fehler landet am Maximum-Feld — dort steht der Wert, der nicht passt. */
   path: SpeciesFieldName;
-  label: string;
 };
 
 export const speciesFormSchema = baseSpeciesSchema.superRefine((data, ctx) => {
@@ -111,19 +110,16 @@ export const speciesFormSchema = baseSpeciesSchema.superRefine((data, ctx) => {
       min: data.temperatureMinCelsius,
       max: data.temperatureMaxCelsius,
       path: 'temperatureMaxCelsius',
-      label: 'Temperatur',
     },
     {
       min: data.humidityMinPercent,
       max: data.humidityMaxPercent,
       path: 'humidityMaxPercent',
-      label: 'Luftfeuchte',
     },
     {
       min: data.adultSizeMinMm,
       max: data.adultSizeMaxMm,
       path: 'adultSizeMaxMm',
-      label: 'Größe',
     },
   ];
 
@@ -132,7 +128,9 @@ export const speciesFormSchema = baseSpeciesSchema.superRefine((data, ctx) => {
       ctx.addIssue({
         code: 'custom',
         path: [range.path],
-        message: `${range.label}: Maximum darf nicht unter dem Minimum liegen.`,
+        // Ohne Bereichsnamen: die Meldung steht am beschrifteten Feld, und in der
+        // Fehlerzusammenfassung steht die Beschriftung schon davor.
+        message: 'Maximum darf nicht unter dem Minimum liegen.',
       });
     }
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,8 +11,28 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { slugify } from '@/lib/slug';
 import { SPECIES_DIFFICULTIES, SPECIES_DIFFICULTY_LABELS } from '@/lib/species/difficulty';
+import { SPECIES_FIELD_NAMES, type SpeciesFieldName } from '@/lib/validation/species';
 
 import { initialSpeciesFormState, type SpeciesFormFields, type SpeciesFormState } from './state';
+
+/**
+ * Eine Quelle fuer die Feldbeschriftungen: das Feld selbst und der Link in der
+ * Fehlerzusammenfassung sollen dieselbe Bezeichnung tragen.
+ */
+const FIELD_LABELS: Record<SpeciesFieldName, string> = {
+  slug: 'Slug',
+  scientificName: 'Wissenschaftlicher Name',
+  commonName: 'Deutscher Name',
+  description: 'Beschreibung',
+  temperatureMinCelsius: 'Temperatur min (°C)',
+  temperatureMaxCelsius: 'Temperatur max (°C)',
+  humidityMinPercent: 'Luftfeuchte min (%)',
+  humidityMaxPercent: 'Luftfeuchte max (%)',
+  adultSizeMinMm: 'Größe adult min (mm)',
+  adultSizeMaxMm: 'Größe adult max (mm)',
+  difficulty: 'Schwierigkeitsgrad',
+  published: 'Veröffentlicht',
+};
 
 const difficultyOptions = SPECIES_DIFFICULTIES.map((value) => ({
   value,
@@ -38,6 +58,8 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
   const [slugEdited, setSlugEdited] = useState(mode === 'edit');
   const [syncedAttempt, setSyncedAttempt] = useState(state.attempt);
 
+  const summaryRef = useRef<HTMLDivElement>(null);
+
   // Zustand waehrend des Renderns nachziehen, statt ihn per Effect zu spiegeln:
   // nach jedem Serverdurchlauf gelten die frischen Werte.
   if (syncedAttempt !== state.attempt) {
@@ -45,6 +67,26 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
     setScientificName(source.scientificName);
     setSlug(source.slug);
   }
+
+  const errors = state.fieldErrors;
+  const listedErrors = SPECIES_FIELD_NAMES.filter((name) => errors[name] !== undefined).map(
+    (name) => ({ name, message: errors[name] ?? '' }),
+  );
+  const hasSummary = state.status === 'error';
+
+  /*
+   * Fokus nach einem Fehlversuch in die Zusammenfassung setzen.
+   *
+   * Ohne das passiert fuer Tastatur- und Screenreader-Nutzer nach dem Absenden nichts
+   * Hoerbares: der Fokus liegt weiter auf dem Absende-Button, waehrend der eigentliche
+   * Hinweis weit oben steht. Der Effect laeuft nach dem Commit — also auch nach dem
+   * Remount der Felder, der Fokus geht damit nicht ins Leere.
+   */
+  useEffect(() => {
+    if (hasSummary) {
+      summaryRef.current?.focus();
+    }
+  }, [state.attempt, hasSummary]);
 
   function handleScientificNameChange(value: string) {
     setScientificName(value);
@@ -55,15 +97,46 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
     }
   }
 
-  const errors = state.fieldErrors;
-
   return (
     <form action={formAction} className="flex flex-col gap-6" noValidate>
-      {state.formError ? (
-        <div role="alert" aria-live="assertive">
-          <p className="rounded-field border border-bloom px-4 py-3 text-caption text-bloom">
-            {state.formError}
+      {hasSummary ? (
+        <div
+          ref={summaryRef}
+          role="alert"
+          aria-live="assertive"
+          tabIndex={-1}
+          className="flex flex-col gap-2 rounded-field border border-bloom px-4 py-3"
+        >
+          <p className="text-caption font-medium text-bloom">
+            {state.formError ??
+              (listedErrors.length === 1
+                ? 'Ein Feld stimmt noch nicht.'
+                : `${String(listedErrors.length)} Felder stimmen noch nicht.`)}
           </p>
+
+          {listedErrors.length > 0 ? (
+            <ul className="flex flex-col gap-1">
+              {listedErrors.map((entry) => (
+                <li key={entry.name}>
+                  <a
+                    href={`#${entry.name}`}
+                    className="text-caption text-bloom underline"
+                    onClick={(event) => {
+                      /*
+                       * Ein reiner Fragment-Link scrollt das Feld zwar heran, setzt den
+                       * Fokus aber nicht hinein — in Chrome bleibt er am Link. Fuer eine
+                       * Fehlerliste ist genau das der Zweck, also von Hand.
+                       */
+                      event.preventDefault();
+                      document.getElementById(entry.name)?.focus();
+                    }}
+                  >
+                    {FIELD_LABELS[entry.name]}: {entry.message}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -84,7 +157,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
           <Input
             id="scientificName"
             name="scientificName"
-            label="Wissenschaftlicher Name"
+            label={FIELD_LABELS.scientificName}
             value={scientificName}
             onChange={(event) => {
               handleScientificNameChange(event.target.value);
@@ -98,7 +171,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
           <Input
             id="commonName"
             name="commonName"
-            label="Deutscher Name"
+            label={FIELD_LABELS.commonName}
             defaultValue={source.commonName}
             error={errors.commonName}
             hint="Optional."
@@ -109,7 +182,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
           <Input
             id="slug"
             name="slug"
-            label="Slug"
+            label={FIELD_LABELS.slug}
             value={slug}
             onChange={(event) => {
               setSlugEdited(true);
@@ -129,7 +202,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
           <Textarea
             id="description"
             name="description"
-            label="Beschreibung"
+            label={FIELD_LABELS.description}
             defaultValue={source.description}
             error={errors.description}
             hint="Optional. Bis 4000 Zeichen."
@@ -144,7 +217,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
             <Input
               id="temperatureMinCelsius"
               name="temperatureMinCelsius"
-              label="Temperatur min (°C)"
+              label={FIELD_LABELS.temperatureMinCelsius}
               defaultValue={source.temperatureMinCelsius}
               error={errors.temperatureMinCelsius}
               inputMode="numeric"
@@ -153,7 +226,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
             <Input
               id="temperatureMaxCelsius"
               name="temperatureMaxCelsius"
-              label="Temperatur max (°C)"
+              label={FIELD_LABELS.temperatureMaxCelsius}
               defaultValue={source.temperatureMaxCelsius}
               error={errors.temperatureMaxCelsius}
               inputMode="numeric"
@@ -162,7 +235,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
             <Input
               id="humidityMinPercent"
               name="humidityMinPercent"
-              label="Luftfeuchte min (%)"
+              label={FIELD_LABELS.humidityMinPercent}
               defaultValue={source.humidityMinPercent}
               error={errors.humidityMinPercent}
               inputMode="numeric"
@@ -171,7 +244,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
             <Input
               id="humidityMaxPercent"
               name="humidityMaxPercent"
-              label="Luftfeuchte max (%)"
+              label={FIELD_LABELS.humidityMaxPercent}
               defaultValue={source.humidityMaxPercent}
               error={errors.humidityMaxPercent}
               inputMode="numeric"
@@ -180,7 +253,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
             <Input
               id="adultSizeMinMm"
               name="adultSizeMinMm"
-              label="Größe adult min (mm)"
+              label={FIELD_LABELS.adultSizeMinMm}
               defaultValue={source.adultSizeMinMm}
               error={errors.adultSizeMinMm}
               inputMode="numeric"
@@ -189,7 +262,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
             <Input
               id="adultSizeMaxMm"
               name="adultSizeMaxMm"
-              label="Größe adult max (mm)"
+              label={FIELD_LABELS.adultSizeMaxMm}
               defaultValue={source.adultSizeMaxMm}
               error={errors.adultSizeMaxMm}
               inputMode="numeric"
@@ -200,7 +273,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
           <Select
             id="difficulty"
             name="difficulty"
-            label="Schwierigkeitsgrad"
+            label={FIELD_LABELS.difficulty}
             options={difficultyOptions}
             placeholder="Nicht eingeordnet"
             defaultValue={source.difficulty}
@@ -214,7 +287,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
           <Checkbox
             id="published"
             name="published"
-            label="Veröffentlicht"
+            label={FIELD_LABELS.published}
             defaultChecked={source.published === 'on'}
             error={errors.published}
             hint="Entwürfe erscheinen später nicht im Shop."
@@ -223,6 +296,7 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Pending kommt aus useActionState; `disabled` verhindert den Doppel-Submit. */}
         <Button type="submit" size="lg" disabled={isPending} aria-busy={isPending}>
           {isPending ? 'Speichert …' : submitLabel}
         </Button>
