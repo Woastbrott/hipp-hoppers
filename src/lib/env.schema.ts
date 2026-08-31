@@ -40,8 +40,17 @@ export const envSchema = z.object({
   SEED_ADMIN_EMAIL: z.union([z.email(), z.literal('')]).optional(),
   SEED_ADMIN_PASSWORD: z.string().optional(),
 
-  /** Phase 1 (Vercel Blob). Platzhalter, damit die Env-Struktur spaeter nicht bricht. */
-  BLOB_READ_WRITE_TOKEN: z.string().optional(),
+  /**
+   * Vercel Blob Store, Lese-/Schreib-Token. Seit dem Bild-Upload nicht mehr optional:
+   * ohne ihn kann die Token-Route keine Client-Uploads ausstellen, und das faellt
+   * sonst erst beim ersten Upload auf.
+   *
+   * Bewusst nur auf Laenge geprueft und nicht auf ein Praefix: das Format ist
+   * Vercel-Sache und darf sich aendern, ohne dass hier der Build bricht.
+   */
+  BLOB_READ_WRITE_TOKEN: z.string().min(20, {
+    error: 'BLOB_READ_WRITE_TOKEN fehlt (Vercel-Dashboard → Storage → Blob → Token).',
+  }),
 });
 
 export type Env = z.infer<typeof envSchema>;

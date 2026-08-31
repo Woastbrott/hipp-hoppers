@@ -17,6 +17,7 @@ env:
   DATABASE_URL: 'postgresql://ci:ci@localhost:5432/hipphoppers'
   JWT_SECRET: 'ci-dummy-secret-mit-mindestens-32-zeichen'
   APP_ORIGIN: ''
+  BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_ci_dummy_token_ohne_funktion'
   NEXT_TELEMETRY_DISABLED: '1'
 
 jobs:
