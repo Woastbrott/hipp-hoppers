@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.github
+coverage
+*.log
+
+# Secrets bleiben draussen — die echten Werte kommen zur Laufzeit aus .env
+.env
+.env.*
+!.env.example
+
+.claude
