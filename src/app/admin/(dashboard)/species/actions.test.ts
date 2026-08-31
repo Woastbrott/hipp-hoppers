@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { adminUsers, products } from '@/db/schema';
+import { adminUsers, products, species } from '@/db/schema';
 import type { Db } from '@/db/types';
 import { signSessionToken } from '@/lib/auth/jwt';
+import { revokeSessions } from '@/lib/auth/session';
 import { listSpecies } from '@/lib/species/queries';
 import { createTestDatabase } from '../../../../../test/db';
 
@@ -62,13 +63,15 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Erst nach den Mocks importieren.
+const actionsModule = await import('./actions');
 const {
   createSpeciesAction,
   deleteSpeciesAction,
   toggleSpeciesPublishedAction,
   updateSpeciesAction,
-} = await import('./actions');
+} = actionsModule;
 const { initialSpeciesDeleteState, initialSpeciesFormState } = await import('./state');
+const { ADMIN_REQUIRED_ERROR, FOREIGN_ORIGIN_ERROR } = await import('@/lib/auth/require-admin');
 
 // --- Fixtures -------------------------------------------------------------
 function formData(overrides: Record<string, string> = {}): FormData {
@@ -94,6 +97,8 @@ function formData(overrides: Record<string, string> = {}): FormData {
   return data;
 }
 
+let adminId = '';
+
 async function signIn(): Promise<void> {
   if (!context.db) throw new Error('Test-Datenbank nicht gesetzt.');
 
@@ -109,7 +114,13 @@ async function signIn(): Promise<void> {
   const admin = rows[0];
   if (!admin) throw new Error('Admin-Fixture fehlgeschlagen.');
 
+  adminId = admin.id;
   context.cookie = await signSessionToken({ sub: admin.id, tv: 1 });
+}
+
+/** Vollstaendiger Zustand der Tabelle — Grundlage fuer "hat sich nichts geaendert". */
+async function speciesSnapshot(): Promise<unknown> {
+  return context.db!.select().from(species).orderBy(species.slug);
 }
 
 async function seedSpecies(): Promise<string> {
@@ -139,79 +150,140 @@ afterEach(async () => {
   context.db = null;
 });
 
-describe('ohne gueltige Session', () => {
-  it('legt createSpeciesAction nichts an', async () => {
-    const result = await createSpeciesAction(initialSpeciesFormState, formData());
+// ---------------------------------------------------------------------------
+// requireAdmin: die Matrix
+// ---------------------------------------------------------------------------
 
-    expect(result.status).toBe('error');
-    expect(result.formError).toMatch(/Nicht angemeldet/);
-    expect(await listSpecies(context.db!)).toEqual([]);
+/** Wie eine abgewiesene Action nach aussen aussieht — Rueckgabewert oder Umleitung. */
+type Denial = { kind: 'error'; message: string | null } | { kind: 'redirect'; target: string };
+
+type GuardedAction = {
+  name: string;
+  /** Ruft die Action so auf, wie sie aus dem Formular kaeme. */
+  run: (speciesId: string) => Promise<Denial>;
+};
+
+async function catchRedirect(call: Promise<unknown>): Promise<Denial> {
+  try {
+    await call;
+    return { kind: 'error', message: 'Action ist durchgelaufen statt abzuweisen.' };
+  } catch (error: unknown) {
+    if (error instanceof TestRedirect) return { kind: 'redirect', target: error.target };
+    throw error;
+  }
+}
+
+const guardedActions: GuardedAction[] = [
+  {
+    name: 'createSpeciesAction',
+    run: async () => {
+      const result = await createSpeciesAction(
+        initialSpeciesFormState,
+        formData({ slug: 'geschmuggelt', scientificName: 'Geschmuggelt' }),
+      );
+      return { kind: 'error', message: result.formError };
+    },
+  },
+  {
+    name: 'updateSpeciesAction',
+    run: async (speciesId) => {
+      const result = await updateSpeciesAction(
+        speciesId,
+        initialSpeciesFormState,
+        formData({ slug: 'gekapert', scientificName: 'Gekapert' }),
+      );
+      return { kind: 'error', message: result.formError };
+    },
+  },
+  {
+    name: 'deleteSpeciesAction',
+    run: async (speciesId) => {
+      const result = await deleteSpeciesAction(
+        speciesId,
+        initialSpeciesDeleteState,
+        new FormData(),
+      );
+      return { kind: 'error', message: result.error };
+    },
+  },
+  {
+    name: 'toggleSpeciesPublishedAction',
+    run: (speciesId) =>
+      catchRedirect(toggleSpeciesPublishedAction(speciesId, true, new FormData())),
+  },
+];
+
+/** Die vier Wege, auf denen eine Anfrage keine gueltige Berechtigung hat. */
+const denials = [
+  {
+    name: 'ohne Cookie',
+    expected: ADMIN_REQUIRED_ERROR,
+    apply: () => {
+      context.cookie = undefined;
+      return Promise.resolve();
+    },
+  },
+  {
+    name: 'mit abgelaufenem Token',
+    expected: ADMIN_REQUIRED_ERROR,
+    apply: async () => {
+      context.cookie = await signSessionToken({ sub: adminId, tv: 1 }, { expiresInSeconds: -60 });
+    },
+  },
+  {
+    name: 'mit veralteter token_version',
+    expected: ADMIN_REQUIRED_ERROR,
+    apply: async () => {
+      // Wie nach einem Logout: das Token ist unversehrt, die Version stimmt nicht mehr.
+      await revokeSessions(context.db!, adminId);
+    },
+  },
+  {
+    name: 'von fremder Origin',
+    expected: FOREIGN_ORIGIN_ERROR,
+    apply: () => {
+      context.headers = { origin: 'https://boeser-nachbar.example', host: 'localhost:3000' };
+      return Promise.resolve();
+    },
+  },
+];
+
+const guardMatrix = guardedActions.flatMap((action) =>
+  denials.map((denial) => ({
+    action: action.name,
+    denial: denial.name,
+    run: action.run,
+    apply: denial.apply,
+    expected: denial.expected,
+  })),
+);
+
+describe('requireAdmin', () => {
+  it('deckt jede exportierte Action der Datei ab', () => {
+    const exported = Object.entries(actionsModule)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name)
+      .sort();
+
+    // Faellt um, sobald jemand eine fuenfte Action ergaenzt, ohne sie hier einzutragen.
+    expect(exported).toEqual(guardedActions.map((entry) => entry.name).sort());
   });
 
-  it('aendert updateSpeciesAction nichts', async () => {
-    const id = await seedSpecies();
-    context.cookie = undefined;
+  it.each(guardMatrix)('$action weist $denial ab und mutiert nichts', async (entry) => {
+    const speciesId = await seedSpecies();
+    const before = await speciesSnapshot();
 
-    const result = await updateSpeciesAction(
-      id,
-      initialSpeciesFormState,
-      formData({ scientificName: 'Gekapert', slug: 'gekapert' }),
-    );
+    await entry.apply();
+    const denial = await entry.run(speciesId);
 
-    expect(result.status).toBe('error');
+    if (denial.kind === 'redirect') {
+      expect(denial.target).toBe('/admin/login');
+    } else {
+      // Exakt die generische Meldung — keine Id, keine Mail, kein Grund.
+      expect(denial.message).toBe(entry.expected);
+    }
 
-    const [row] = await listSpecies(context.db!);
-    expect(row?.scientificName).toBe('Hierodula majuscula');
-  });
-
-  it('loescht deleteSpeciesAction nichts', async () => {
-    const id = await seedSpecies();
-    context.cookie = undefined;
-
-    const result = await deleteSpeciesAction(id, initialSpeciesDeleteState, new FormData());
-
-    expect(result.error).toMatch(/Nicht angemeldet/);
-    expect(await listSpecies(context.db!)).toHaveLength(1);
-  });
-
-  it('schaltet toggleSpeciesPublishedAction nichts um, sondern schickt zur Anmeldung', async () => {
-    const id = await seedSpecies();
-    context.cookie = undefined;
-
-    await expect(toggleSpeciesPublishedAction(id, true, new FormData())).rejects.toBeInstanceOf(
-      TestRedirect,
-    );
-
-    expect(redirects.at(-1)).toBe('/admin/login');
-
-    const [row] = await listSpecies(context.db!);
-    expect(row?.published).toBe(false);
-  });
-
-  it('lehnt auch ein abgelaufenes Token ab', async () => {
-    await signIn();
-    context.cookie = await signSessionToken(
-      { sub: '11111111-2222-4333-8444-555555555555', tv: 1 },
-      { expiresInSeconds: -60 },
-    );
-
-    const result = await createSpeciesAction(initialSpeciesFormState, formData());
-
-    expect(result.status).toBe('error');
-    expect(await listSpecies(context.db!)).toEqual([]);
-  });
-});
-
-describe('CSRF', () => {
-  it('lehnt eine Anfrage von fremder Origin ab, auch mit gueltiger Session', async () => {
-    await signIn();
-    context.headers = { origin: 'https://boeser-nachbar.example', host: 'localhost:3000' };
-
-    const result = await createSpeciesAction(initialSpeciesFormState, formData());
-
-    expect(result.status).toBe('error');
-    expect(result.formError).toMatch(/abgelehnt/);
-    expect(await listSpecies(context.db!)).toEqual([]);
+    expect(await speciesSnapshot()).toEqual(before);
   });
 });
 
