@@ -1,0 +1,197 @@
+@import 'tailwindcss';
+
+/* Quellen explizit ab src/, damit die Erkennung nicht von der CSS-Position abhaengt. */
+@source '../';
+
+/*
+ * prefers-reduced-transparency hat Tailwind (noch) nicht eingebaut.
+ * motion-reduce: und contrast-more: gibt es bereits ab Werk.
+ */
+@custom-variant reduce-transparency (@media (prefers-reduced-transparency: reduce));
+
+/* ---------------------------------------------------------------------------
+ * Farb-Tokens — botanisch-editorial.
+ * Sieben semantische Rollen, keine Hex-Werte im Markup.
+ * Kontraste (WCAG 2.1, gemessen): siehe README.
+ * ------------------------------------------------------------------------ */
+@theme {
+  --color-paper: #fbf8f1;
+  --color-ink: #1b1f1a;
+  --color-canopy: #123d2a;
+  --color-fern: #36704d;
+  --color-bloom: #b8442a;
+  --color-sand: #f0e9da;
+  --color-line: #8a8271;
+
+  /* -----------------------------------------------------------------------
+   * Typo-Skala als Set: Groesse + Leading + Tracking + Gewicht gehoeren zusammen.
+   * Tracking ist groessenabhaengig (gross negativ, Body ~0, Labels leicht positiv),
+   * Leading skaliert invers zur Groesse. Alles fluid ueber clamp(), Basis rem —
+   * damit die Textgroessen-Einstellung des Users das Layout nicht zerlegt.
+   * -------------------------------------------------------------------- */
+  --text-display: clamp(2.75rem, 1.55rem + 4.4vw, 5rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.03em;
+  --text-display--font-weight: 500;
+
+  --text-title: clamp(2rem, 1.4rem + 2.2vw, 3rem);
+  --text-title--line-height: 1.08;
+  --text-title--letter-spacing: -0.022em;
+  --text-title--font-weight: 500;
+
+  --text-heading: clamp(1.5rem, 1.2rem + 1.1vw, 2rem);
+  --text-heading--line-height: 1.16;
+  --text-heading--letter-spacing: -0.015em;
+  --text-heading--font-weight: 600;
+
+  --text-subhead: clamp(1.125rem, 1.05rem + 0.35vw, 1.375rem);
+  --text-subhead--line-height: 1.32;
+  --text-subhead--letter-spacing: -0.008em;
+  --text-subhead--font-weight: 600;
+
+  --text-lead: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  --text-lead--line-height: 1.55;
+  --text-lead--letter-spacing: -0.003em;
+  --text-lead--font-weight: 400;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+  --text-body--letter-spacing: 0em;
+  --text-body--font-weight: 400;
+
+  --text-caption: 0.875rem;
+  --text-caption--line-height: 1.45;
+  --text-caption--letter-spacing: 0.005em;
+  --text-caption--font-weight: 400;
+
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.08em;
+  --text-label--font-weight: 500;
+
+  --radius-card: 0.75rem;
+  --radius-field: 0.5rem;
+}
+
+/*
+ * `inline`, weil die Werte auf Variablen zeigen, die next/font erst am <html>-Element
+ * setzt. Ohne inline wuerde Tailwind die Referenz einmal in :root aufloesen.
+ */
+@theme inline {
+  --font-display: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
+}
+
+/*
+ * Dark-Variante ueber prefers-color-scheme. Bewusst kein Theme-Switcher-UI.
+ * Die Rollen bleiben gleich: canopy/bloom sind hier hell, paper ist der Textkontrast
+ * auf ihnen — semantische Klassen wie `bg-bloom text-paper` funktionieren in beiden Modi.
+ * Die Regel steht ausserhalb von @layer theme und gewinnt darum gegen die Basiswerte.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: #10130e;
+    --color-ink: #ede9de;
+    --color-canopy: #86c9a0;
+    --color-fern: #b2dfc2;
+    --color-bloom: #f2a579;
+    --color-sand: #1a1e17;
+    --color-line: #666e5e;
+
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Fraunces ist variabel inkl. opsz-Achse — Optical Sizing darf der Browser machen. */
+  .font-display,
+  h1,
+  h2,
+  h3 {
+    font-optical-sizing: auto;
+  }
+
+  /* Sichtbarer Fokus auf allem, was fokussierbar ist. Nie wegnehmen, nur gestalten. */
+  :focus-visible {
+    outline: 2px solid var(--color-canopy);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-fern);
+    color: var(--color-paper);
+  }
+
+  /* Zahlen in Tabellen/Preisen sollen nicht springen. */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * Barrierefreiheit — die drei Praeferenzen global abfangen. Komponenten setzen
+ * darueber hinaus eigene motion-reduce:/contrast-more:-Varianten.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /*
+   * Kein hartes `animation: none` — Cross-Fades bleiben erlaubt, nur die
+   * Bewegung verschwindet. Deshalb sehr kurze Dauer statt Abschaltung.
+   */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  * {
+    backdrop-filter: none !important;
+  }
+}
+
+/*
+ * Hoher Kontrast: Trennlinien deutlich verstaerken (8.7:1 statt 3.6:1) und
+ * Transparenz rausnehmen. Pro Farbschema getrennt, sonst wuerde der dunklere
+ * Linienwert im Dark Mode gegen den dunklen Grund verschwinden.
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --color-line: #4d473c;
+  }
+
+  * {
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) and (prefers-contrast: more) {
+  :root {
+    --color-line: #9aa392;
+  }
+}
