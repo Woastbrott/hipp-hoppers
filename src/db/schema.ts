@@ -165,8 +165,17 @@ export const media = pgTable(
   (table) => [
     index('media_species_id_idx').on(table.speciesId),
     index('media_product_id_idx').on(table.productId),
+    /**
+     * Ein Blob gehoert genau einmal in die Tabelle. Faellt eine Antwort des
+     * Upload-Clients aus und der Browser wiederholt den Persist-Aufruf, entsteht
+     * sonst ein zweiter Eintrag auf dieselbe Datei.
+     */
+    uniqueIndex('media_url_key').on(table.url),
+    /** Deckt die Sortierung der Galerie ab: alle Bilder einer Art in Position-Reihenfolge. */
+    index('media_species_position_idx').on(table.speciesId, table.position),
     check('media_owner_exactly_one', sql`num_nonnulls(${table.speciesId}, ${table.productId}) = 1`),
     check('media_dimensions_positive', sql`${table.width} > 0 and ${table.height} > 0`),
+    check('media_position_non_negative', sql`${table.position} >= 0`),
   ],
 );
 
