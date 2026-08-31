@@ -32,3 +32,13 @@ export type SpeciesDeleteState = {
 export const initialSpeciesDeleteState: SpeciesDeleteState = { error: null };
 
 export const SLUG_TAKEN_ERROR = 'Diesen Slug gibt es schon. Nimm einen anderen.';
+
+/** Zustand der kleinen Bild-Formulare (Alt-Text, Löschen, Reihenfolge). */
+export type MediaActionState = {
+  error: string | null;
+};
+
+export const initialMediaActionState: MediaActionState = { error: null };
+
+/** Ergebnis des Persistierens nach einem Upload — der Client ruft es aus JavaScript auf. */
+export type MediaPersistResult = { ok: true } | { ok: false; error: string };

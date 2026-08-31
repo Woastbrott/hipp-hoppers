@@ -4,7 +4,7 @@ import { useFormStatus } from 'react-dom';
 
 import { Button, type ButtonProps } from './button';
 
-export type SubmitButtonProps = Omit<ButtonProps, 'type' | 'disabled'> & {
+export type SubmitButtonProps = Omit<ButtonProps, 'type'> & {
   /** Text waehrend der Absendung. Ohne Angabe bleibt die Beschriftung stehen. */
   pendingLabel?: string;
 };
@@ -18,11 +18,11 @@ export type SubmitButtonProps = Omit<ButtonProps, 'type' | 'disabled'> & {
  *
  * `disabled` waehrend der Absendung verhindert den Doppelklick.
  */
-export function SubmitButton({ children, pendingLabel, ...props }: SubmitButtonProps) {
+export function SubmitButton({ children, pendingLabel, disabled, ...props }: SubmitButtonProps) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={pending} aria-busy={pending} {...props}>
+    <Button type="submit" disabled={pending || disabled === true} aria-busy={pending} {...props}>
       {pending && pendingLabel !== undefined ? pendingLabel : children}
     </Button>
   );

@@ -8,11 +8,14 @@ import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { Section } from '@/components/ui/section';
 import { db } from '@/db';
+import { listSpeciesMedia } from '@/lib/media/queries';
 import { countProductsForSpecies, findSpeciesById } from '@/lib/species/queries';
 import { speciesToFormFields } from '@/lib/species/form-fields';
 
 import { deleteSpeciesAction, updateSpeciesAction } from '../actions';
 import { DeleteSpecies } from '../delete-species';
+import { MediaList } from '../media-list';
+import { MediaUploader } from '../media-uploader';
 import { SpeciesForm } from '../species-form';
 
 export const metadata: Metadata = {
@@ -38,6 +41,7 @@ export default async function EditSpeciesPage({ params }: { params: Promise<{ id
   }
 
   const productCount = await countProductsForSpecies(db, row.id);
+  const mediaItems = await listSpeciesMedia(db, row.id);
 
   // Binden passiert hier, im Server Component — Next verschluesselt den gebundenen Wert,
   // er ist damit nicht aus dem Client heraus austauschbar.
@@ -70,7 +74,16 @@ export default async function EditSpeciesPage({ params }: { params: Promise<{ id
           />
         </div>
 
-        <Card className="mt-10 flex flex-col gap-4 border-bloom/40">
+        <section aria-labelledby="bilder" className="mt-14 flex flex-col gap-6">
+          <h2 id="bilder" className="font-display text-heading text-canopy">
+            Bilder
+          </h2>
+
+          <MediaUploader speciesId={row.id} />
+          <MediaList items={mediaItems} />
+        </section>
+
+        <Card className="mt-14 flex flex-col gap-4 border-bloom/40">
           <div>
             <h2 className="font-display text-subhead text-canopy">Löschen</h2>
             <p className="mt-2 max-w-[52ch] text-body text-ink/80">

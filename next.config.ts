@@ -56,6 +56,21 @@ const nextConfig: NextConfig = {
 
   typedRoutes: true,
 
+  /*
+   * Bilder liegen im Vercel Blob Store. Ohne diesen Eintrag weigert sich next/image,
+   * die Quelle zu laden — die zweite Haelfte steht in der CSP (`img-src` in proxy.ts).
+   * Fehlt eine von beiden, bleibt die Galerie leer.
+   */
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
+        pathname: '/**',
+      },
+    ],
+  },
+
   // Next erwartet hier eine Promise; nichts zu awaiten, also kein `async`.
   headers() {
     return Promise.resolve([
