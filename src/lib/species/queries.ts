@@ -158,9 +158,9 @@ export async function countProductsForSpecies(db: Db, speciesId: string): Promis
  *  2. Der Fremdschluessel steht auf `restrict` und faengt den Fall, in dem zwischen
  *     Zaehlung und Delete ein Produkt entsteht.
  *
- * Eine Transaktion waere hier das naheliegende Mittel — der neon-http-Treiber kann
- * aber keine interaktiven Transaktionen. Das Constraint leistet dasselbe, ohne dass
- * die Anwendung dafuer geradestehen muss.
+ * Eine Transaktion um Zaehlung und Delete waere moeglich, aber ueberfluessig: das
+ * Constraint leistet dasselbe und gilt auch fuer Schreibzugriffe, die gar nicht durch
+ * diese Funktion laufen.
  *
  * Die Bild-URLs werden VOR dem Loeschen eingesammelt, weil die `media`-Zeilen mit der
  * Art kaskadierend verschwinden. Das Aufraeumen im Blob-Store macht die Action —

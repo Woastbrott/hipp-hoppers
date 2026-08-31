@@ -44,7 +44,7 @@ kippt etwas, bricht der **Build**, nicht erst die erste Anfrage.
 
 | Variable                | Pflicht | Zweck                                                                |
 | ----------------------- | ------- | -------------------------------------------------------------------- |
-| `DATABASE_URL`          | ja      | Neon-Connection-String (`postgresql://…`)                            |
+| `DATABASE_URL`          | ja      | Postgres-Connection-String (`postgresql://…`)                        |
 | `JWT_SECRET`            | ja      | HS256-Schlüssel für das Session-JWT, **≥ 32 Zeichen**                |
 | `APP_ORIGIN`            | nein    | Erlaubte Origin für den CSRF-Check. Leer ⇒ gegen Request-Host        |
 | `SEED_ADMIN_EMAIL`      | Seed    | Konto, das `pnpm db:seed` anlegt                                     |
@@ -108,9 +108,11 @@ erzeugt; ein statischer Header kann ihn nicht tragen. Alles Übrige
 (`Strict-Transport-Security`, `X-Frame-Options`, `Permissions-Policy` …) steht in
 `next.config.ts`.
 
-**Neon over HTTP.** Kein Connection-Pool, der eine serverless Invocation ohnehin nicht
-überlebt. Konsequenz: keine interaktiven Transaktionen — deshalb ist das Hochzählen im
-Rate-Limiter ein einzelnes `INSERT … ON CONFLICT DO UPDATE` statt Read-Modify-Write.
+**Postgres im eigenen Container, `node-postgres` mit Pool.** Der Next-Server ist ein
+langlebiger Prozess, keine serverless Function — Verbindungen überleben zwischen
+Requests und werden gepoolt (max 10, passend zu 2 vCPU). Interaktive Transaktionen sind
+damit möglich; die bestehenden Ein-Statement-Lösungen bleiben trotzdem, weil sie
+weiterhin atomar sind und einen Roundtrip sparen.
 
 **Polymorphe Medien als exclusive arc.** `media` hat zwei typisierte, nullable
 Fremdschlüssel (`species_id`, `product_id`) plus CHECK, dass genau einer gesetzt ist.
@@ -144,9 +146,9 @@ verwaiste Datei, die ein paar Cent kostet. Der `del()`-Aufruf ist best effort; w
 liegen bleibt, sammelt `pnpm blob:prune` wieder ein.
 
 **Reihenfolge per Positions-Tausch.** Hoch/Runter tauscht die Positionen zweier
-Nachbarn in einem einzigen `UPDATE … CASE` — atomar ohne Transaktion, die der
-neon-http-Treiber nicht kann. Lücken in der Zahlenfolge nach einem Löschen stören
-nicht: sortiert wird nach Position, nicht danach, ob sie lückenlos ist.
+Nachbarn in einem einzigen `UPDATE … CASE` — atomar, ohne dass eine Transaktion nötig
+wäre. Lücken in der Zahlenfolge nach einem Löschen stören nicht: sortiert wird nach
+Position, nicht danach, ob sie lückenlos ist.
 
 ## Design-System
 
@@ -215,7 +217,7 @@ src/
                        Checkbox, Card, Badge, Container, Section, Reveal
   db/
     schema.ts          Tabellen + Relations, Typen per Infer*Model
-    index.ts           Drizzle-Client (Neon, server-only)
+    index.ts           Drizzle-Client (node-postgres Pool, server-only)
     migrations/        drizzle-kit-Output
     seed.ts            idempotenter Admin-Seed
   lib/
@@ -232,65 +234,52 @@ src/
   proxy.ts             Nonce-CSP + JWT-Vorprüfung (Next 16, ex-middleware.ts)
 ```
 
-## Deployment auf einen eigenen Server
+## Deployment
 
-Gebaut wird als Container: Next im `standalone`-Modus hinter Caddy, das TLS terminiert.
+Ziel ist ein Hostinger-KVM (Ubuntu, Alias `kvm2`), auf dem **Coolify** die Deployments
+fährt. Reverse Proxy und TLS macht Coolifys Traefik — kein eigener nginx, kein Caddy.
+Postgres läuft als eigener Container und ist nur über das interne Docker-Netz
+erreichbar.
 
-**Was der Server braucht:** Docker mit Compose-Plugin. Sonst nichts — Node, pnpm und
-der Build laufen im Image.
+Im Repo liegt dafür nur das `Dockerfile` (mehrstufig, `output: 'standalone'`, läuft als
+eigener Benutzer, Healthcheck auf `/admin/login` — eine Route, die ohne Datenbank
+rendert). Alles andere — Proxy, Zertifikat, Netz, Neustarts — macht Coolify.
 
-**Was unabhängig vom Server nötig bleibt:** eine Neon-Datenbank und ein Vercel Blob
-Store. Beide spricht die App über HTTPS an, egal wo sie läuft — der Treiber
-(`neon-http`) und die Bildablage sind Teil der Architektur, nicht des Hostings.
+### Was in Coolify eingerichtet wird
 
-**Und ein Name, keine nackte IP.** Das Session-Cookie ist in Produktion `Secure`; über
-einfaches HTTP verwirft der Browser es, die Anmeldung funktioniert dann nicht. Caddy
-holt automatisch ein Zertifikat, braucht dafür aber einen DNS-Namen. Ohne eigene Domain
-tut es `<server-ip>.nip.io`.
-
-### Einmalig auf dem Server
-
-```bash
-ssh benutzer@server 'mkdir -p /opt/hipp-hoppers'
-```
-
-Dann `.env.production.example` als `/opt/hipp-hoppers/.env` anlegen und ausfüllen.
-Diese Datei überträgt das Deploy-Script bewusst nicht — Secrets reisen nicht mit.
-
-### Bei jedem Deploy
-
-```bash
-./deploy/deploy.sh benutzer@server
-```
-
-Das Script überträgt den Arbeitsstand per rsync (ohne `node_modules`, `.next` und
-`.env`), baut das Image auf dem Server und startet neu. Der Zugriff läuft über deinen
-SSH-Key.
+1. **Postgres-Ressource** anlegen. Coolify erzeugt Datenbank, Benutzer und einen
+   internen Hostnamen.
+2. **Anwendung** vom Typ „Dockerfile" auf dieses Repository zeigen lassen.
+3. **Environment Variables** setzen — die Liste steht in
+   [`.env.production.example`](.env.production.example). Secrets ausschließlich hier,
+   nie im Repo und nie inline in einem Befehl.
+4. **Domain** eintragen. Ohne TLS funktioniert die Anmeldung nicht: das Session-Cookie
+   ist in Produktion `Secure`, über einfaches HTTP verwirft der Browser es.
+   `APP_ORIGIN` muss zur eingetragenen Domain passen, sonst greift der CSRF-Check.
 
 ### Migrationen
 
-Sie laufen nicht im Container — `drizzle-kit` ist im Laufzeit-Image nicht enthalten.
-Neon ist von überall erreichbar, also von deiner Maschine aus gegen die Produktions-URL:
+Sie laufen nicht im Container — `drizzle-kit` ist im Laufzeit-Image nicht enthalten,
+und Schema-Änderungen gehören ohnehin über `drizzle-kit` statt als manuelles SQL.
+Postgres ist von außen nicht erreichbar, der Weg führt deshalb über einen
+SSH-Tunnel auf den internen Container:
 
 ```bash
-DATABASE_URL="<produktions-url>" pnpm db:migrate
+ssh -L 55432:<db-container>:5432 kvm2
 ```
 
-Den ersten Admin genauso:
+Und in einer zweiten Shell gegen den Tunnel:
 
 ```bash
-DATABASE_URL="<produktions-url>" SEED_ADMIN_EMAIL="…" SEED_ADMIN_PASSWORD="…" pnpm db:seed
+DATABASE_URL="postgresql://<user>:<passwort>@127.0.0.1:55432/<db>" pnpm db:migrate
 ```
+
+Den ersten Admin genauso, mit `pnpm db:seed` statt `db:migrate`.
 
 ### Nachsehen, ob es läuft
 
-```bash
-ssh benutzer@server 'cd /opt/hipp-hoppers && docker compose ps && docker compose logs --tail=50 app'
-```
-
-Der Container hat einen Healthcheck auf `/admin/login` — eine Route, die ohne
-Datenbankzugriff rendert. Steht dort `healthy`, läuft die Anwendung; Fehler bei Neon
-oder Blob zeigen sich erst beim Anmelden.
+Status, Logs und Neustarts laufen über die Coolify-UI. Builds gehören dorthin und
+nicht von Hand auf den Server — zwei vCPU reichen für parallele Next-Builds nicht.
 
 ## CI
 

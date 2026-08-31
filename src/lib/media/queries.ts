@@ -71,8 +71,8 @@ export async function findMediaById(
 
 /**
  * Haengt das Bild ans Ende. Die naechste Position kommt aus einer Unterabfrage im
- * selben Statement — bei zwei gleichzeitigen Uploads waere ein vorheriges SELECT
- * eine Race, und der neon-http-Treiber hat keine interaktiven Transaktionen.
+ * selben Statement: bei zwei gleichzeitigen Uploads waere ein vorheriges SELECT eine
+ * Race Condition, und ein Statement loest das ohne Transaktion und ohne Sperre.
  */
 export async function insertSpeciesMedia(
   db: Db,
@@ -151,7 +151,7 @@ export async function deleteMedia(db: Db, mediaId: string): Promise<MediaDeleteR
  * Tauscht die Position mit dem Nachbarn.
  *
  * Ein Tausch statt einer Neunummerierung: das ist ein einziges UPDATE mit CASE und
- * damit atomar ohne Transaktion. Luecken in der Zahlenfolge (nach einem Loeschen)
+ * damit atomar, ohne dass eine Transaktion noetig waere. Luecken in der Zahlenfolge
  * stoeren dabei nicht — sortiert wird nach Position, nicht danach, ob sie
  * lueckenlos ist.
  */

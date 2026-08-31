@@ -6,7 +6,7 @@ import type * as schema from './schema';
 /**
  * Treiber-unabhaengiger Handle auf die Datenbank.
  *
- * Produktion faehrt `drizzle-orm/neon-http`, die Unit-Tests fahren PGlite (echtes
+ * Produktion faehrt `drizzle-orm/node-postgres`, die Unit-Tests fahren PGlite (echtes
  * Postgres im Speicher). Beide sind `PgDatabase` — die Auth-Funktionen nehmen deshalb
  * den Handle als Parameter entgegen, statt das Modul-Singleton zu importieren.
  * Das haelt sie testbar, ohne die Query-Logik zu mocken.

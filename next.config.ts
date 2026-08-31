@@ -59,7 +59,8 @@ const nextConfig: NextConfig = {
   output: 'standalone',
 
   // `@node-rs/argon2` ist ein natives Modul (.node) und darf nicht gebundelt werden.
-  serverExternalPackages: ['@node-rs/argon2'],
+  // `pg` bleibt ebenfalls extern: der Treiber laedt Teile erst zur Laufzeit nach.
+  serverExternalPackages: ['@node-rs/argon2', 'pg'],
 
   typedRoutes: true,
 

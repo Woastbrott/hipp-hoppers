@@ -8,10 +8,10 @@ import type { Db } from '@/db/types';
 /**
  * Login-Rate-Limit mit State in Postgres.
  *
- * Warum nicht in-memory: auf Vercel hat jede Invocation ihren eigenen Heap. Eine Map
- * besteht lokal jeden Test und zaehlt in Produktion faktisch nichts, weil der naechste
- * Versuch auf einer anderen Instanz landet. Der Zaehler muss also dorthin, wo alle
- * Instanzen hinschauen.
+ * Warum nicht in-memory: eine Map im Prozess verliert ihren Inhalt bei jedem Neustart
+ * und bei jedem Deployment — ein Angreifer muesste nur warten. Sie haelt ausserdem
+ * nicht, sobald mehr als ein Container laeuft. Der Zaehler gehoert dorthin, wo alle
+ * Instanzen hinschauen und wo er einen Neustart ueberlebt.
  *
  * Zwei Buckets pro Versuch:
  *  - `ip:<adresse>`  — bremst Spraying ueber viele Konten von einer Quelle.
@@ -89,8 +89,9 @@ export async function checkRateLimit(
  * Zaehlt einen Fehlversuch und sperrt, wenn der Schwellwert erreicht ist.
  *
  * Das Hochzaehlen ist ein einziges Statement (INSERT … ON CONFLICT DO UPDATE), also
- * atomar auch bei parallelen Requests — der neon-http-Treiber kann keine interaktiven
- * Transaktionen, ein Read-Modify-Write waere hier eine Race Condition.
+ * atomar auch bei parallelen Requests. Ein Read-Modify-Write ueber zwei Statements
+ * waere hier eine Race Condition — auch mit Transaktion braeuchte es dafuer eine
+ * Sperre, die ein einzelnes UPSERT gratis mitbringt.
  */
 export async function registerFailedAttempt(
   db: Db,
