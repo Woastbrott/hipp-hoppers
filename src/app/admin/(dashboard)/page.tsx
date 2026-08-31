@@ -1,3 +1,6 @@
+import Link from 'next/link';
+
+import { buttonClasses } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { Section } from '@/components/ui/section';
@@ -18,8 +21,14 @@ export default async function AdminHomePage() {
         <h1 className="font-display text-title text-canopy">Admin</h1>
 
         <p className="mt-4 max-w-[52ch] text-lead text-ink/80">
-          Der geschuetzte Bereich steht. Produkt- und Arten-Verwaltung folgt.
+          Arten lassen sich anlegen und pflegen. Produkte und Bilder folgen.
         </p>
+
+        <div className="mt-8">
+          <Link href="/admin/species" className={buttonClasses('primary')}>
+            Arten verwalten
+          </Link>
+        </div>
 
         <Card className="mt-10 max-w-prose">
           <dl className="grid gap-4 sm:grid-cols-2">

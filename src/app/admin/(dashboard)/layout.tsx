@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
@@ -26,9 +27,19 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
     <div className="flex min-h-dvh flex-col">
       <header className="border-b border-line/50">
         <Container width="wide" className="flex h-16 items-center justify-between gap-4">
-          <div className="flex items-baseline gap-3">
-            <span className="font-display text-subhead text-canopy">Hipp Hoppers</span>
-            <span className="font-mono text-label text-fern uppercase">Admin</span>
+          <div className="flex items-baseline gap-5">
+            <Link href="/admin" className="font-display text-subhead text-canopy">
+              Hipp Hoppers
+            </Link>
+
+            <nav aria-label="Admin-Navigation">
+              <Link
+                href="/admin/species"
+                className="font-mono text-label text-fern uppercase hover:text-canopy"
+              >
+                Arten
+              </Link>
+            </nav>
           </div>
 
           <div className="flex items-center gap-4">
