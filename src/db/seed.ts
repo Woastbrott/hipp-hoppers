@@ -58,7 +58,7 @@ async function seed(): Promise<void> {
   const row = rows[0];
 
   if (!row) {
-    throw new Error('Seed fehlgeschlagen: die Datenbank hat keine Zeile zurueckgegeben.');
+    throw new Error('Seed fehlgeschlagen: die Datenbank hat keine Zeile zurückgegeben.');
   }
 
   const action = existing.length > 0 ? 'aktualisiert' : 'angelegt';
