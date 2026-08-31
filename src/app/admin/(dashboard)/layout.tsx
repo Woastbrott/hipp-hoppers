@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { getCurrentAdmin } from '@/lib/auth/current-admin';
 
 import { logoutAction } from './actions';
@@ -46,9 +46,9 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
             <span className="hidden font-mono text-label text-fern sm:inline">{admin.email}</span>
 
             <form action={logoutAction}>
-              <Button type="submit" variant="outline" size="sm">
+              <SubmitButton variant="outline" size="sm" pendingLabel="Moment …">
                 Abmelden
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </Container>

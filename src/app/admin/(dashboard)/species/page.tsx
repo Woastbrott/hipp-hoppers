@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonClasses } from '@/components/ui/button';
+import { buttonClasses } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { Section } from '@/components/ui/section';
+import { SubmitButton } from '@/components/ui/submit-button';
 import { db } from '@/db';
 import { SPECIES_DIFFICULTY_LABELS } from '@/lib/species/difficulty';
 import { listSpecies } from '@/lib/species/queries';
@@ -116,13 +117,15 @@ export default async function SpeciesListPage() {
 
                     <td className="py-4">
                       <div className="flex items-center justify-end gap-3">
-                        {/* Einzelner Button, kein State: funktioniert auch ohne JavaScript. */}
+                        {/* Einzelner Button, kein eigener State: funktioniert auch ohne
+                            JavaScript. SubmitButton liest den Pending-Zustand aus dem
+                            Formular und sperrt sich waehrenddessen gegen Doppelklicks. */}
                         <form
                           action={toggleSpeciesPublishedAction.bind(null, item.id, !item.published)}
                         >
-                          <Button type="submit" variant="ghost" size="sm">
+                          <SubmitButton variant="ghost" size="sm" pendingLabel="Moment …">
                             {item.published ? 'Auf Entwurf' : 'Veröffentlichen'}
-                          </Button>
+                          </SubmitButton>
                         </form>
 
                         <Link
