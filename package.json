@@ -20,11 +20,13 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --conditions=react-server src/db/seed.ts"
+    "db:seed": "tsx --conditions=react-server src/db/seed.ts",
+    "blob:prune": "tsx --conditions=react-server src/scripts/blob-prune.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.1.0",
     "@node-rs/argon2": "2.2.0",
+    "@vercel/blob": "2.8.0",
     "drizzle-orm": "0.45.2",
     "jose": "6.2.10",
     "motion": "13.1.1",
