@@ -232,6 +232,66 @@ src/
   proxy.ts             Nonce-CSP + JWT-Vorprüfung (Next 16, ex-middleware.ts)
 ```
 
+## Deployment auf einen eigenen Server
+
+Gebaut wird als Container: Next im `standalone`-Modus hinter Caddy, das TLS terminiert.
+
+**Was der Server braucht:** Docker mit Compose-Plugin. Sonst nichts — Node, pnpm und
+der Build laufen im Image.
+
+**Was unabhängig vom Server nötig bleibt:** eine Neon-Datenbank und ein Vercel Blob
+Store. Beide spricht die App über HTTPS an, egal wo sie läuft — der Treiber
+(`neon-http`) und die Bildablage sind Teil der Architektur, nicht des Hostings.
+
+**Und ein Name, keine nackte IP.** Das Session-Cookie ist in Produktion `Secure`; über
+einfaches HTTP verwirft der Browser es, die Anmeldung funktioniert dann nicht. Caddy
+holt automatisch ein Zertifikat, braucht dafür aber einen DNS-Namen. Ohne eigene Domain
+tut es `<server-ip>.nip.io`.
+
+### Einmalig auf dem Server
+
+```bash
+ssh benutzer@server 'mkdir -p /opt/hipp-hoppers'
+```
+
+Dann `.env.production.example` als `/opt/hipp-hoppers/.env` anlegen und ausfüllen.
+Diese Datei überträgt das Deploy-Script bewusst nicht — Secrets reisen nicht mit.
+
+### Bei jedem Deploy
+
+```bash
+./deploy/deploy.sh benutzer@server
+```
+
+Das Script überträgt den Arbeitsstand per rsync (ohne `node_modules`, `.next` und
+`.env`), baut das Image auf dem Server und startet neu. Der Zugriff läuft über deinen
+SSH-Key.
+
+### Migrationen
+
+Sie laufen nicht im Container — `drizzle-kit` ist im Laufzeit-Image nicht enthalten.
+Neon ist von überall erreichbar, also von deiner Maschine aus gegen die Produktions-URL:
+
+```bash
+DATABASE_URL="<produktions-url>" pnpm db:migrate
+```
+
+Den ersten Admin genauso:
+
+```bash
+DATABASE_URL="<produktions-url>" SEED_ADMIN_EMAIL="…" SEED_ADMIN_PASSWORD="…" pnpm db:seed
+```
+
+### Nachsehen, ob es läuft
+
+```bash
+ssh benutzer@server 'cd /opt/hipp-hoppers && docker compose ps && docker compose logs --tail=50 app'
+```
+
+Der Container hat einen Healthcheck auf `/admin/login` — eine Route, die ohne
+Datenbankzugriff rendert. Steht dort `healthy`, läuft die Anwendung; Fehler bei Neon
+oder Blob zeigen sich erst beim Anmelden.
+
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) läuft bei Push und PR:
