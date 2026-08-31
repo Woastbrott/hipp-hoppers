@@ -1,0 +1,27 @@
+# Build / Dependencies
+node_modules/
+.pnpm-store/
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+
+# Env — alles ausser dem Beispiel
+.env
+.env.*
+!.env.example
+
+# Tooling-Caches
+.eslintcache
+coverage/
+*.tsbuildinfo
+.vercel/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

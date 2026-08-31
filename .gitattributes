@@ -1,0 +1,13 @@
+# Einheitliche Zeilenenden im Repo UND im Working Tree.
+# Ohne das schreibt Git unter Windows (core.autocrlf=true) CRLF ins Arbeitsverzeichnis,
+# was mit Prettier (endOfLine: "lf") kollidiert.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
