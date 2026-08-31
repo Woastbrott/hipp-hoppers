@@ -8,6 +8,13 @@
       "when": 1788186903701,
       "tag": "0000_aromatic_nico_minoru",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788189423184,
+      "tag": "0001_numerous_bushwacker",
+      "breakpoints": true
     }
   ]
 }

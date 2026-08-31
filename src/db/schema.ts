@@ -13,6 +13,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { SPECIES_DIFFICULTIES } from '@/lib/species/difficulty';
+
 /**
  * Konvention: Postgres-Bezeichner snake_case (explizit als String im pgTable-Mapping),
  * Drizzle-Properties camelCase. Kein implizites Casing — was in der DB steht, steht hier.
@@ -30,11 +32,9 @@ const updatedAt = timestamp('updated_at', { withTimezone: true, mode: 'date' })
 // Enums
 // ---------------------------------------------------------------------------
 
-export const speciesDifficultyEnum = pgEnum('species_difficulty', [
-  'einsteiger',
-  'fortgeschritten',
-  'experte',
-]);
+// Werte kommen aus lib/species/difficulty.ts — dieselbe Liste speist das Zod-Enum
+// und die Optionen im Formular.
+export const speciesDifficultyEnum = pgEnum('species_difficulty', SPECIES_DIFFICULTIES);
 
 export const productStatusEnum = pgEnum('product_status', ['draft', 'active', 'archived']);
 
@@ -97,6 +97,10 @@ export const species = pgTable(
       'species_humidity_range_valid',
       sql`${table.humidityMinPercent} is null or ${table.humidityMaxPercent} is null or ${table.humidityMinPercent} <= ${table.humidityMaxPercent}`,
     ),
+    check(
+      'species_adult_size_range_valid',
+      sql`${table.adultSizeMinMm} is null or ${table.adultSizeMaxMm} is null or ${table.adultSizeMinMm} <= ${table.adultSizeMaxMm}`,
+    ),
   ],
 );
 
@@ -114,7 +118,13 @@ export const products = pgTable(
     /** Geld immer als Ganzzahl in der kleinsten Einheit. Kein Float, nie. */
     priceCents: integer('price_cents').notNull(),
     currency: varchar('currency', { length: 3 }).notNull().default('EUR'),
-    speciesId: uuid('species_id').references(() => species.id, { onDelete: 'set null' }),
+    /**
+     * `restrict` statt `set null`: eine Art zu loeschen, an der Produkte haengen,
+     * wuerde diese still von ihrer Art trennen. Die Datenbank lehnt das jetzt ab —
+     * die Server Action prueft vorher, damit die Meldung lesbar bleibt, aber die
+     * Garantie liegt hier und nicht in der Anwendung.
+     */
+    speciesId: uuid('species_id').references(() => species.id, { onDelete: 'restrict' }),
     status: productStatusEnum('status').notNull().default('draft'),
     createdAt,
     updatedAt,
@@ -238,5 +248,4 @@ export type NewMedia = InferInsertModel<typeof media>;
 export type LoginAttempt = InferSelectModel<typeof loginAttempts>;
 export type NewLoginAttempt = InferInsertModel<typeof loginAttempts>;
 
-export type SpeciesDifficulty = (typeof speciesDifficultyEnum.enumValues)[number];
 export type ProductStatus = (typeof productStatusEnum.enumValues)[number];
