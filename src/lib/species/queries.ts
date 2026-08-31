@@ -5,6 +5,7 @@ import { asc, count, eq } from 'drizzle-orm';
 import { products, species, type Species } from '@/db/schema';
 import type { Db } from '@/db/types';
 import { isForeignKeyViolation, isUniqueViolation } from '@/lib/db-errors';
+import { collectSpeciesBlobUrls } from '@/lib/media/queries';
 import type { SpeciesFormValues } from '@/lib/validation/species';
 
 /** Aus der Migration; siehe src/db/migrations. */
@@ -27,7 +28,8 @@ export type SpeciesWriteResult =
   | { ok: false; reason: 'not_found' };
 
 export type SpeciesDeleteResult =
-  | { ok: true }
+  /** `blobUrls` sind die Dateien, die jetzt niemand mehr referenziert. */
+  | { ok: true; blobUrls: string[] }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'has_products'; productCount: number };
 
@@ -159,6 +161,10 @@ export async function countProductsForSpecies(db: Db, speciesId: string): Promis
  * Eine Transaktion waere hier das naheliegende Mittel — der neon-http-Treiber kann
  * aber keine interaktiven Transaktionen. Das Constraint leistet dasselbe, ohne dass
  * die Anwendung dafuer geradestehen muss.
+ *
+ * Die Bild-URLs werden VOR dem Loeschen eingesammelt, weil die `media`-Zeilen mit der
+ * Art kaskadierend verschwinden. Das Aufraeumen im Blob-Store macht die Action —
+ * hier bleibt es bei der Datenbank.
  */
 export async function deleteSpecies(db: Db, id: string): Promise<SpeciesDeleteResult> {
   const productCount = await countProductsForSpecies(db, id);
@@ -167,12 +173,14 @@ export async function deleteSpecies(db: Db, id: string): Promise<SpeciesDeleteRe
     return { ok: false, reason: 'has_products', productCount };
   }
 
+  const blobUrls = await collectSpeciesBlobUrls(db, id);
+
   try {
     const rows = await db.delete(species).where(eq(species.id, id)).returning({ id: species.id });
 
     if (rows.length === 0) return { ok: false, reason: 'not_found' };
 
-    return { ok: true };
+    return { ok: true, blobUrls };
   } catch (error: unknown) {
     if (isForeignKeyViolation(error, PRODUCT_SPECIES_FK)) {
       const current = await countProductsForSpecies(db, id);

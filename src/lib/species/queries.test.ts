@@ -173,7 +173,8 @@ describe('deleteSpecies', () => {
   it('loescht eine Art ohne Produkte', async () => {
     const id = await createOk();
 
-    expect(await deleteSpecies(db, id)).toEqual({ ok: true });
+    // `blobUrls` ist die Liste der Dateien, die die Action danach aufraeumen soll.
+    expect(await deleteSpecies(db, id)).toEqual({ ok: true, blobUrls: [] });
     expect(await findSpeciesById(db, id)).toBeNull();
   });
 
