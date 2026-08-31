@@ -101,6 +101,14 @@ export function SpeciesForm({ action, defaults, submitLabel, mode }: SpeciesForm
     <form action={formAction} className="flex flex-col gap-6" noValidate>
       {hasSummary ? (
         <div
+          /*
+           * Key pro Serverdurchlauf: beim zweiten Fehlversuch in Folge liegt der Fokus
+           * schon auf diesem Element, und ein erneutes `focus()` auf denselben Knoten
+           * loest kein Ereignis aus — der Screenreader saehe nichts Neues. Der Remount
+           * gibt einen frischen Knoten, der Fokus wandert wirklich, und die Live-Region
+           * meldet sich auch bei identischem Text noch einmal.
+           */
+          key={state.attempt}
           ref={summaryRef}
           role="alert"
           aria-live="assertive"
