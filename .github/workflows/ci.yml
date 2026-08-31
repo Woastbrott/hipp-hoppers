@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Syntaktisch valide Dummy-Werte. Damit laeuft die Zod-Env-Validierung im Build
+  # tatsaechlich durch, statt aufgeweicht oder per Flag uebersprungen zu werden.
+  # Echte Secrets braucht die CI in Phase 0 nicht: es wird nichts deployt, und keine
+  # Datenbank angefasst — die Tests laufen gegen PGlite im Speicher.
+  DATABASE_URL: 'postgresql://ci:ci@localhost:5432/hipphoppers'
+  JWT_SECRET: 'ci-dummy-secret-mit-mindestens-32-zeichen'
+  APP_ORIGIN: ''
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  verify:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Vor setup-node, damit dessen pnpm-Cache greift.
+      - name: pnpm einrichten
+        uses: pnpm/action-setup@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.13.0'
+          cache: 'pnpm'
+
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Next-Build-Cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'src/**/*.css') }}
+          restore-keys: |
+            ${{ runner.os }}-next-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
