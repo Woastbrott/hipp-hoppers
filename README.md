@@ -184,8 +184,11 @@ Gemessene Kontraste (WCAG 2.1) — beide Modi bestehen alle geprüften Paare:
 Bei `prefers-contrast: more` wird `line` auf `#4d473c` (light, 8.68 : 1) bzw. `#9aa392`
 (dark, 7.16 : 1) verstärkt.
 
-**Typografie.** Fraunces (Headlines, variabel inkl. `opsz`), Inter (Fließtext/UI),
-IBM Plex Mono (Preise, SKUs, technische Meta). Alle über `next/font` mit
+**Typografie.** Fraunces (Headlines, variabel inkl. `opsz`, aufrecht und kursiv),
+Inter (Fließtext/UI), IBM Plex Mono (Preise, SKUs, technische Meta). Die Kursive ist
+kein Zierschnitt: wissenschaftliche Artnamen stehen nach taxonomischer Konvention
+kursiv, und ohne echten Schnitt würde der Browser sie schrägstellen statt sie zu
+setzen. Alle über `next/font` mit
 `display: swap`, auf `latin` subgesetzt und selbst ausgeliefert. Die Skala ist als Set
 definiert — Größe, Leading, Tracking und Gewicht gehören pro Stufe zusammen; Tracking
 ist größenabhängig (Display `-0.03em`, Body `0`, Labels `+0.08em`), Leading skaliert
@@ -206,6 +209,7 @@ semantisches HTML vor ARIA.
 src/
   app/
     (shop)/            öffentliche Storefront-Routen
+      arten/           Verzeichnis + Detailseite [slug] (published-only, Draft-Vorschau)
     admin/
       layout.tsx       gemeinsame Hülle (kein Gate)
       login/           öffentlich erreichbar
@@ -213,8 +217,11 @@ src/
         species/       Arten-CRUD + Bildverwaltung: Liste, new/, [id]/, actions.ts
     api/admin/media/   Token-Route für den Client-Upload
     layout.tsx, error.tsx, not-found.tsx
-  components/ui/       Button, SubmitButton, Field, Input, Select, Textarea,
+  components/
+    ui/                Button, SubmitButton, Field, Input, Select, Textarea,
                        Checkbox, Card, Badge, Container, Section, Reveal
+    species/           Karte, Titelbild-Platzhalter, Care-Block, Entwurfs-Banner,
+                       kursiver Artname
   db/
     schema.ts          Tabellen + Relations, Typen per Infer*Model
     index.ts           Drizzle-Client (node-postgres Pool, server-only)
@@ -224,9 +231,11 @@ src/
     auth/              JWT, Session, Passwort, Rate-Limit, CSRF, requireAdmin
     blob/              Upload-Vertrag, Token-Entscheidung, Prune-Logik
     media/             Queries für Bilder einer Art
-    species/           Queries, Schwierigkeitsgrad, Formular-Mapping
+    species/           Queries, öffentliche Queries + Seitenzugriff, Care-Block-
+                       und Metadaten-Formatter, Schwierigkeitsgrad, Formular-Mapping
     validation/        Zod-Schemata der Formulargrenzen
     slug.ts            Slug-Vorschlag
+    text.ts            Absätze und Whitespace für die Anzeige
     db-errors.ts       Postgres-Fehlercodes (23505/23503) lesbar machen
     env.ts             Zod-validierte Env (server-only)
   scripts/             CLI: blob-prune
@@ -304,6 +313,33 @@ Eine hash-basierte CSP wäre die Alternative, wird aber **nicht** gebaut. Neu be
 wird die Frage erst, wenn die öffentliche Storefront steht und Performance oder Kosten
 es tatsächlich erfordern — nicht vorher.
 
+## Öffentliche Arten-Seiten
+
+`/arten` listet ausschließlich veröffentlichte Arten, `/arten/[slug]` zeigt eine davon
+mit Bildern und Care-Daten. Der Sichtbarkeitsfilter liegt in
+[`lib/species/public-queries.ts`](src/lib/species/public-queries.ts) und nicht in den
+Seiten — sonst wäre es eine Frage der Zeit, bis eine ihn vergisst.
+
+**Draft-Vorschau.** Ein unveröffentlichter Slug ergibt `notFound()`. Liegt eine gültige
+Admin-Session vor, wird der Entwurf stattdessen gerendert, mit einem Banner auf `bloom`
+über der ganzen Seite. Das ist reine Lese-Logik über `getCurrentAdmin()`, ohne
+Redirect-Zwang — das Guard-Gate der mutierenden Actions bleibt davon unberührt. Für
+Nicht-Eingeloggte ist ein Entwurf nicht von einem falschen Slug zu unterscheiden: beide
+liefern 404, sonst ließen sich unveröffentlichte Arten durchprobieren.
+
+**Titelbild.** Das erste Bild in `position`-Reihenfolge. Im Verzeichnis kommt es per
+`distinct on (species_id)` aus demselben Query wie die Liste — ein Query pro Karte wären
+bei fünfzig Arten fünfzig Roundtrips für je ein Bild.
+
+**Teilweise gepflegte Daten.** `buildCareFacts` entscheidet selbst, welche Zeile
+erscheint: „24–30 °C", „ab 25 °C", „bis 70 %", und gar nichts, wenn beide Grenzen fehlen.
+Ein Label ohne Wert kann so nicht entstehen.
+
+**Kein `Reveal` auf diesen Seiten.** Die Komponente schreibt `opacity: 0` bereits ins
+servergerenderte HTML und nimmt es erst per JavaScript zurück. Auf einer Inhaltsseite
+hieße das: Überschrift ohne JS unsichtbar. Die Landing hat diese Eigenschaft weiterhin
+(siehe offene Punkte).
+
 ## Offene Punkte
 
 - `style-src` trägt `'unsafe-inline'`. next/font und Tailwind schreiben Style-Tags zur
@@ -314,4 +350,11 @@ es tatsächlich erfordern — nicht vorher.
 - Keine Bild-Optimierungspipeline: hochgeladen wird, was ausgewählt wurde. `next/image`
   skaliert beim Ausliefern, das Original bleibt im Store liegen.
 - Die Artenliste hat weder Pagination noch Sortierung oder Suche. Ab etwa fünfzig
-  Arten wird das unhandlich.
+  Arten wird das unhandlich. Das öffentliche Verzeichnis ebenso — dort kommen noch
+  Suche, Filter und Pagination dazu.
+- `Reveal` rendert `opacity: 0` ins SSR-HTML und braucht JavaScript, um es
+  zurückzunehmen. Auf der Landing steht deshalb der Kopfbereich ohne JS unsichtbar da.
+  Sauber wäre eine CSS-Animation, die vom sichtbaren Zustand ausgeht.
+- Kein OG-Bild, keine `sitemap.xml`, keine strukturierten Daten für die Arten-Seiten.
+- Die Galerie hat weder Lightbox noch Zoom. Das Titelbild ist unbeschnitten, die
+  weiteren Bilder laufen in einem 3:2-Rahmen mit `object-cover`.
