@@ -11,9 +11,16 @@ import { Fraunces, IBM_Plex_Mono, Inter } from 'next/font/google';
  * die Datei bleibt klein.
  */
 
+/**
+ * Italic wird mitgeladen, weil sie hier Inhalt traegt und nicht Dekoration ist:
+ * wissenschaftliche Namen stehen nach taxonomischer Konvention kursiv, und sie stehen
+ * in Fraunces. Ohne echten Schnitt wuerde der Browser eine Schraegstellung
+ * errechnen — bei einer Display-Schrift mit eigenen Kursivformen sieht man das.
+ */
 export const fraunces = Fraunces({
   subsets: ['latin'],
   display: 'swap',
+  style: ['normal', 'italic'],
   axes: ['opsz'],
   variable: '--font-fraunces',
 });
