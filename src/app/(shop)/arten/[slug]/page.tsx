@@ -6,8 +6,8 @@ import { CareBlock } from '@/components/species/care-block';
 import { DraftNotice } from '@/components/species/draft-notice';
 import { ScientificName } from '@/components/species/scientific-name';
 import { Container } from '@/components/ui/container';
-import { Reveal } from '@/components/ui/reveal';
 import { Section } from '@/components/ui/section';
+import { cn } from '@/lib/cn';
 import { buildCareFacts } from '@/lib/species/care';
 import { speciesMetaDescription, speciesMetaTitle } from '@/lib/species/meta';
 import { loadPublicSpecies, resolvePublicSpecies } from '@/lib/species/public-page';
@@ -41,6 +41,9 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
   const facts = buildCareFacts(species);
   const paragraphs = toParagraphs(species.description);
 
+  const hasProse = paragraphs.length > 0;
+  const hasCare = facts.length > 0;
+
   return (
     <>
       {species.published ? null : <DraftNotice speciesId={species.id} />}
@@ -54,15 +57,16 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
             ← Alle Arten
           </Link>
 
-          <Reveal className="mt-6">
-            <h1 className="font-display text-title text-canopy">
-              <ScientificName>{species.scientificName}</ScientificName>
-            </h1>
+          {/* Kein `Reveal`: die Komponente setzt `opacity: 0` bereits im
+              servergerenderten HTML und holt es erst per JavaScript zurueck. Der
+              Artname waere ohne JS unsichtbar — dafuer ist ein Auftritt zu wenig wert. */}
+          <h1 className="mt-6 font-display text-title text-canopy">
+            <ScientificName>{species.scientificName}</ScientificName>
+          </h1>
 
-            {species.commonName ? (
-              <p className="mt-3 text-lead text-ink/80">{species.commonName}</p>
-            ) : null}
-          </Reveal>
+          {species.commonName ? (
+            <p className="mt-3 text-lead text-ink/80">{species.commonName}</p>
+          ) : null}
 
           {cover ? (
             <figure className="mt-10">
@@ -81,19 +85,30 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
             </figure>
           ) : null}
 
-          {paragraphs.length > 0 || facts.length > 0 ? (
-            <div className="mt-14 grid gap-12 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-16">
-              {/* Zeilenlaenge ueber `ch` begrenzt, nicht ueber die Spaltenbreite: das
-                  Raster darf breiter werden, der Fliesstext soll es nicht. */}
-              <div className="flex max-w-[70ch] flex-col gap-5">
-                {paragraphs.map((paragraph, index) => (
-                  <p key={index} className="text-body text-ink">
-                    {paragraph}
-                  </p>
-                ))}
-              </div>
+          {hasProse || hasCare ? (
+            <div
+              className={cn(
+                'mt-14 grid gap-12',
+                // Zwei Spalten nur, wenn beide auch etwas zu zeigen haben. Sonst
+                // stuende der Care-Block neben einer leeren Flaeche.
+                hasProse && hasCare && 'lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-16',
+              )}
+            >
+              {hasProse ? (
+                /* Dieselbe Breite wie `Container width="prose"`: gemessen rund 74
+                   Zeichen pro Zeile. `ch` waere die naheliegende Einheit, misst aber
+                   die Null — in Inter gut zwei Pixel breiter als der Durchschnitts-
+                   buchstabe, was bei 70ch auf 86 Zeichen hinauslief. */
+                <div className="flex max-w-[38rem] flex-col gap-5">
+                  {paragraphs.map((paragraph, index) => (
+                    <p key={index} className="text-body text-ink">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
 
-              {facts.length > 0 ? <CareBlock facts={facts} /> : null}
+              {hasCare ? <CareBlock facts={facts} className={hasProse ? '' : 'max-w-sm'} /> : null}
             </div>
           ) : null}
 

@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { SpeciesCard } from '@/components/species/species-card';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
-import { Reveal } from '@/components/ui/reveal';
 import { Section } from '@/components/ui/section';
 import { db } from '@/db';
 import { listPublishedSpecies } from '@/lib/species/public-queries';
@@ -27,18 +26,18 @@ export default async function SpeciesDirectoryPage() {
     <>
       <Section spacing="lg">
         <Container>
-          {/* Ein Reveal fuer den ganzen Kopf. Gestaffelte Auftritte pro Zeile waeren
-              hier Deko, und die Karten darunter bleiben ohnehin still. */}
-          <Reveal>
-            <p className="font-mono text-label text-fern uppercase">Verzeichnis</p>
+          {/* Ohne `Reveal`: die Komponente schreibt `opacity: 0` schon ins
+              servergerenderte HTML und nimmt es erst per JavaScript zurueck. Auf einer
+              Inhaltsseite hiesse das, dass die Ueberschrift ohne JS unsichtbar bleibt —
+              und die Phase-0-Regel sagt im Zweifel weglassen. */}
+          <p className="font-mono text-label text-fern uppercase">Verzeichnis</p>
 
-            <h1 className="mt-4 font-display text-display text-canopy">Arten</h1>
+          <h1 className="mt-4 font-display text-display text-canopy">Arten</h1>
 
-            <p className="mt-6 max-w-[52ch] text-lead text-ink/80">
-              Was bei uns schlüpft, wächst und irgendwann umzieht. Zu jeder Art steht da, was sie
-              zum Leben braucht — Klima, Größe, Anspruch.
-            </p>
-          </Reveal>
+          <p className="mt-6 max-w-[52ch] text-lead text-ink/80">
+            Was bei uns schlüpft, wächst und irgendwann umzieht. Zu jeder Art steht da, was sie zum
+            Leben braucht — Klima, Größe, Anspruch.
+          </p>
         </Container>
       </Section>
 
