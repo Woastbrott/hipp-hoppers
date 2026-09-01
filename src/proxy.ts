@@ -1,6 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth/jwt';
+import { BLOB_HOST_SUFFIX } from '@/lib/blob/upload-contract';
+
+/**
+ * Der Store-Host als CSP-Muster. Aus derselben Konstante wie der Vertrag, damit
+ * Anzeigen und Hochladen nicht mit zwei Schreibweisen desselben Hosts arbeiten.
+ * `upload-contract.ts` ist bewusst frei von `server-only` und Imports und darf
+ * deshalb auch hier hinein.
+ */
+const BLOB_STORE_HOST_PATTERN = `*${BLOB_HOST_SUFFIX}`;
 
 /**
  * Next 16: `proxy.ts` ersetzt `middleware.ts` (gleiche Mechanik, neuer Name).
@@ -32,11 +41,19 @@ function buildContentSecurityPolicy(nonce: string): string {
     // ein Nonce erreicht sie nicht zuverlaessig. Inline-CSS ist als Angriffsflaeche
     // deutlich harmloser als Inline-JS.
     `style-src 'self' 'unsafe-inline'`,
-    // blob:/data: fuer clientseitige Vorschauen; die Blob-Domain steht schon drin,
-    // damit Phase 1 (Bild-Uploads) die CSP nicht anfassen muss.
-    `img-src 'self' blob: data: https://*.public.blob.vercel-storage.com`,
+    // blob:/data: fuer clientseitige Vorschauen, dazu der Store zum Anzeigen.
+    `img-src 'self' blob: data: https://${BLOB_STORE_HOST_PATTERN}`,
     `font-src 'self' data:`,
-    `connect-src 'self'${isDevelopment ? ' ws: http://localhost:*' : ''}`,
+    /*
+     * Der Client-Upload laedt die Datei nicht ueber unseren Server, sondern direkt
+     * an Vercel — `img-src` deckt nur das Anzeigen ab, nicht das Schreiben. Ohne
+     * diese beiden Hosts blockt die CSP den PUT, das Blob-SDK wiederholt still und
+     * der Uploader haengt sichtbar bei 0 %.
+     *
+     * `vercel.com` ist die Control-Plane (`/api/blob`), der Store-Host nimmt die
+     * Multipart-Teile groesserer Dateien entgegen.
+     */
+    `connect-src 'self' https://vercel.com https://${BLOB_STORE_HOST_PATTERN}${isDevelopment ? ' ws: http://localhost:*' : ''}`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,
