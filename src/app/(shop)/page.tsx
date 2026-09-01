@@ -1,3 +1,6 @@
+import Link from 'next/link';
+
+import { buttonClasses } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { Reveal } from '@/components/ui/reveal';
@@ -26,8 +29,16 @@ export default function LandingPage() {
 
           <Reveal delay={0.1}>
             <p className="mt-6 max-w-[46ch] text-lead text-ink/80">
-              Fundament steht. Inhalte folgen.
+              Die Arten stehen. Alles andere wächst noch.
             </p>
+          </Reveal>
+
+          <Reveal delay={0.15}>
+            <div className="mt-8">
+              <Link href="/arten" className={buttonClasses('secondary')}>
+                Arten ansehen
+              </Link>
+            </div>
           </Reveal>
         </Container>
       </Section>

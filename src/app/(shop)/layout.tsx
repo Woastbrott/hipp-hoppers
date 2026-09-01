@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { Container } from '@/components/ui/container';
 
 /**
- * Storefront-Huelle. Phase 0: nur Struktur — Header, Inhaltsbereich, Footer.
- * Navigation und Inhalte kommen, wenn es sie gibt.
+ * Storefront-Huelle: Header, Inhaltsbereich, Footer. Die Navigation fuehrt genau
+ * dorthin, wo es etwas zu sehen gibt — bislang das Artenverzeichnis.
  */
 export default function ShopLayout({ children }: { children: ReactNode }) {
   return (
@@ -24,7 +24,12 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
           </Link>
 
           <nav aria-label="Hauptnavigation">
-            <span className="font-mono text-label text-fern uppercase">Phase 0</span>
+            <Link
+              href="/arten"
+              className="font-mono text-label text-fern uppercase hover:text-canopy"
+            >
+              Arten
+            </Link>
           </nav>
         </Container>
       </header>
